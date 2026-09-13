@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Compilados de Java
+bin/
+out/
+*.class
+
+# Configuración de IDEs
+.vscode/
+.idea/
+*.iml
