@@ -84,6 +84,7 @@ public class ListaCircularDoble<T> { // <T> indica que es una lista generica, pu
     public NodoDoble<T> avanzar(NodoDoble<T> actual, int pasos) { // nodoDoble<T> actual: el nodo desde el cual se empieza a contar los pasos. int pasos: la cantidad de pasos a avanzar.
         validarNoVacia(); // 
         validarNodo(actual);
+        validarPasos(pasos);
  
         NodoDoble<T> nodo = actual; // NodoDoble<T> nodo: variable temporal para recorrer la lista sin modificar el nodo actual.
         for (int i = 0; i < pasos; i++) {
@@ -99,6 +100,7 @@ public class ListaCircularDoble<T> { // <T> indica que es una lista generica, pu
     public NodoDoble<T> retroceder(NodoDoble<T> actual, int pasos) {
         validarNoVacia();
         validarNodo(actual);
+        validarPasos(pasos);
  
         NodoDoble<T> nodo = actual;
         for (int i = 0; i < pasos; i++) {
@@ -120,6 +122,7 @@ public class ListaCircularDoble<T> { // <T> indica que es una lista generica, pu
     public boolean pasaPorInicio(NodoDoble<T> actual, int pasos) {
         validarNoVacia();
         validarNodo(actual);
+        validarPasos(pasos);
  
         NodoDoble<T> nodo = actual;
         for (int i = 0; i < pasos; i++) {
@@ -251,6 +254,22 @@ public class ListaCircularDoble<T> { // <T> indica que es una lista generica, pu
         if (nodo == null) {
             throw new IllegalArgumentException("El nodo recibido es null");
             // IllegalArgumentException es un error que indica que el argumento pasado a un metodo es invalido.
+        }
+    }
+ 
+    /**
+     * Los pasos vienen de los dados o de una carta de evento, y siempre son
+     * hacia adelante: para ir hacia atras esta retroceder().
+     *
+     * Sin esta validacion un numero negativo no falla, que es lo peor que
+     * podria pasar: los ciclos de avanzar() y retroceder() no dan ninguna
+     * vuelta y devuelven el mismo nodo. La ficha se queda quieta, nadie ve un
+     * error, y el bug aparece mucho despues como "a veces el jugador no se
+     * mueve".
+     */
+    private void validarPasos(int pasos) {
+        if (pasos < 0) {
+            throw new IllegalArgumentException("La cantidad de pasos no puede ser negativa: " + pasos);
         }
     }
  
