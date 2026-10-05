@@ -6,8 +6,10 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+import Protocolo.Protocolo;
+
 /**
- * Se encarga de manejar la comunicación con un cliente
+ * Se encarga de manejar la comunicacion con un cliente
  * conectado al servidor.
  *
  * Cada cliente se atiende mediante un hilo independiente.
@@ -33,7 +35,7 @@ public class ManejadorCliente implements Runnable {
     }
 
     /**
-     * Se inicia la comunicación con el cliente.
+     * Se inicia la comunicacion con el cliente.
      */
     @Override
     public void run() {
@@ -53,12 +55,12 @@ public class ManejadorCliente implements Runnable {
                 true
             );
 
-            // Se confirma que la conexión fue establecida.
-            salida.println("CONEXION_OK");
+            // Se confirma que la conexion TCP fue establecida.
+            enviarMensaje(Protocolo.CONEXION_OK);
 
             String mensaje;
 
-            // Se reciben mensajes mientras el cliente continúe conectado.
+            // Se reciben mensajes mientras el cliente continue conectado.
             while ((mensaje = entrada.readLine()) != null) {
 
                 System.out.println(
@@ -88,32 +90,66 @@ public class ManejadorCliente implements Runnable {
      */
     private void procesarMensaje(String mensaje) {
 
-        // *
-
         switch (mensaje) {
 
-            case "CONECTAR":
-                enviarMensaje("CONECTADO");
+            case Protocolo.CONECTAR:
+
+                enviarMensaje(
+                    Protocolo.CONECTADO
+                );
+
                 break;
 
-            case "CONSULTAR_ESTADO":
-                enviarMensaje("ESTADO_PENDIENTE");
+            case Protocolo.TIRAR_DADOS:
+
+                // *
+
                 break;
 
-            case "CONSULTAR_TRANSACCIONES":
-                enviarMensaje("TRANSACCIONES_PENDIENTES");
+            case Protocolo.COMPRAR_PROPIEDAD:
+
+                // *
+
+                break;
+
+            case Protocolo.NO_COMPRAR:
+
+                // *
+
+                break;
+
+            case Protocolo.TERMINAR_TURNO:
+
+                // *
+
+                break;
+
+            case Protocolo.CONSULTAR_ESTADO:
+
+                // *
+
+                break;
+
+            case Protocolo.CONSULTAR_TRANSACCIONES:
+
+                // *
+
                 break;
 
             default:
-                enviarMensaje("ERROR|COMANDO_DESCONOCIDO");
+
+                enviarMensaje(
+                    Protocolo.ERROR_COMANDO
+                );
+
                 break;
         }
     }
 
     /**
-     * Se envía un mensaje al cliente.
+     * Se envia un mensaje al cliente.
      *
-     * @param mensaje mensaje que se enviará.
+     * @param mensaje mensaje que se enviara.
      */
     public void enviarMensaje(String mensaje) {
 
@@ -123,13 +159,13 @@ public class ManejadorCliente implements Runnable {
     }
 
     /**
-     * Se cierra la conexión del cliente.
+     * Se cierra la conexion del cliente.
      */
     private void cerrarConexion() {
 
         try {
 
-            // Se verifica que el socket continúe abierto.
+            // Se verifica que el socket continue abierto.
             if (socketCliente != null &&
                 !socketCliente.isClosed()) {
 
