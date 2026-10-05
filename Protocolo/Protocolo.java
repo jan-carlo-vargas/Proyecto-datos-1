@@ -38,9 +38,17 @@ public final class Protocolo {
     public static final String CONEXION_OK =
         "CONEXION_OK";
 
-    // Se utiliza para confirmar que el cliente fue conectado.
+    // Se utiliza para confirmar el registro de un jugador.
     public static final String CONECTADO =
         "CONECTADO";
+
+    // Se utiliza para informar que la partida fue iniciada.
+    public static final String PARTIDA_INICIADA =
+        "PARTIDA_INICIADA";
+
+    // Se utiliza para informar el jugador que posee el turno.
+    public static final String TURNO =
+        "TURNO";
 
     // Se utiliza cuando se recibe un comando no reconocido.
     public static final String ERROR_COMANDO =
