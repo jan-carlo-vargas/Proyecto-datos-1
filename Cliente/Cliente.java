@@ -30,17 +30,25 @@ public class Cliente {
     private PrintWriter salida;
 
     // Indica si el cliente se encuentra conectado.
-    private boolean conectado;
+    private volatile boolean conectado;
+
+    // Se utiliza para escuchar mensajes del servidor.
+    private Thread hiloReceptor;
 
     /**
      * Se crea un cliente con la direccion y el puerto indicados.
      *
      * @param direccionServidor direccion IP del servidor.
-     * @param puerto puerto TCP utilizado por el servidor.
+     * @param puerto            puerto TCP utilizado por el servidor.
      */
-    public Cliente(String direccionServidor, int puerto) {
+    public Cliente(
+            String direccionServidor,
+            int puerto) {
+
         this.direccionServidor = direccionServidor;
+
         this.puerto = puerto;
+
         this.conectado = false;
     }
 
@@ -53,39 +61,30 @@ public class Cliente {
 
         try {
 
-            // Se establece la conexion TCP con el servidor.
             socket = new Socket(
-                direccionServidor,
-                puerto
-            );
+                    direccionServidor,
+                    puerto);
 
-            // Se prepara la entrada de mensajes.
             entrada = new BufferedReader(
-                new InputStreamReader(
-                    socket.getInputStream()
-                )
-            );
+                    new InputStreamReader(
+                            socket.getInputStream()));
 
-            // Se prepara la salida de mensajes.
             salida = new PrintWriter(
-                socket.getOutputStream(),
-                true
-            );
+                    socket.getOutputStream(),
+                    true);
 
             conectado = true;
 
             System.out.println(
-                "Conexion establecida con el servidor."
-            );
+                    "Conexion establecida con el servidor.");
 
             return true;
 
         } catch (IOException e) {
 
             System.out.println(
-                "No se pudo conectar con el servidor: "
-                + e.getMessage()
-            );
+                    "No se pudo conectar con el servidor: "
+                            + e.getMessage());
 
             conectado = false;
 
@@ -94,47 +93,80 @@ public class Cliente {
     }
 
     /**
-     * Se envia un mensaje al servidor.
-     *
-     * @param mensaje mensaje que se enviara.
+     * Se inicia el hilo encargado de escuchar al servidor.
      */
-    public void enviarMensaje(String mensaje) {
+    public void iniciarReceptor() {
 
-        if (conectado && salida != null) {
+        if (!conectado
+                || entrada == null) {
 
-            salida.println(mensaje);
+            return;
+        }
 
-        } else {
+        hiloReceptor = new Thread(
+                new Runnable() {
 
-            System.out.println(
-                "No existe una conexion con el servidor."
-            );
+                    @Override
+                    public void run() {
+
+                        escucharServidor();
+                    }
+                });
+
+        hiloReceptor.start();
+    }
+
+    /**
+     * Se escuchan continuamente los mensajes enviados
+     * por el servidor.
+     */
+    private void escucharServidor() {
+
+        try {
+
+            String mensaje;
+
+            while (conectado
+                    && (mensaje = entrada.readLine()) != null) {
+
+                System.out.println(
+                        "Servidor: "
+                                + mensaje);
+            }
+
+        } catch (IOException e) {
+
+            if (conectado) {
+
+                System.out.println(
+                        "Se perdio la conexion con el servidor: "
+                                + e.getMessage());
+            }
+
+        } finally {
+
+            conectado = false;
         }
     }
 
     /**
-     * Se recibe un mensaje enviado por el servidor.
+     * Se envia un mensaje al servidor.
      *
-     * @return mensaje recibido.
+     * @param mensaje mensaje que se enviara.
      */
-    public String recibirMensaje() {
+    public void enviarMensaje(
+            String mensaje) {
 
-        if (!conectado || entrada == null) {
-            return null;
-        }
+        if (conectado
+                && salida != null) {
 
-        try {
+            salida.println(
+                    mensaje);
 
-            return entrada.readLine();
-
-        } catch (IOException e) {
+        } else {
 
             System.out.println(
-                "Error al recibir el mensaje: "
-                + e.getMessage()
-            );
-
-            return null;
+                    "No existe una conexion con el servidor.");
         }
     }
 
@@ -147,23 +179,20 @@ public class Cliente {
 
         try {
 
-            // Se verifica que el socket continue abierto.
-            if (socket != null &&
-                !socket.isClosed()) {
+            if (socket != null
+                    && !socket.isClosed()) {
 
                 socket.close();
             }
 
             System.out.println(
-                "Cliente desconectado."
-            );
+                    "Cliente desconectado.");
 
         } catch (IOException e) {
 
             System.out.println(
-                "Error al cerrar la conexion: "
-                + e.getMessage()
-            );
+                    "Error al cerrar la conexion: "
+                            + e.getMessage());
         }
     }
 
@@ -177,67 +206,115 @@ public class Cliente {
     }
 
     /**
-     * Se ejecuta una prueba de conexion con el servidor.
+     * Se muestran los comandos disponibles para la prueba.
+     */
+    private static void mostrarComandos() {
+
+        System.out.println();
+        System.out.println(
+                "Comandos disponibles:");
+
+        System.out.println(
+                "TERMINAR_TURNO");
+
+        System.out.println(
+                "SALIR");
+
+        System.out.println();
+    }
+
+    /**
+     * Se ejecuta el cliente de prueba.
+     *
+     * @param args argumentos de ejecucion.
      */
     public static void main(String[] args) {
 
-        // Se crea un cliente conectado al equipo local.
-        Cliente cliente =
-            new Cliente("localhost", 5000);
+        BufferedReader teclado = new BufferedReader(
+                new InputStreamReader(
+                        System.in));
 
-        if (cliente.conectar()) {
+        Cliente cliente = new Cliente(
+                "localhost",
+                5000);
 
-            // Se recibe la confirmacion inicial del servidor.
-            String respuesta =
-                cliente.recibirMensaje();
+        if (!cliente.conectar()) {
+            return;
+        }
+
+        try {
+
+            // Se recibe la confirmacion inicial de la conexion.
+            String respuestaInicial = cliente.entrada.readLine();
 
             System.out.println(
-                "Servidor: " + respuesta
-            );
+                    "Servidor: "
+                            + respuestaInicial);
 
-            // Se envia el comando de conexion.
+            System.out.print(
+                    "Ingrese el ID del jugador: ");
+
+            String id = teclado.readLine();
+
+            System.out.print(
+                    "Ingrese el nombre del jugador: ");
+
+            String nombre = teclado.readLine();
+
+            // Se inicia la escucha permanente del servidor.
+            cliente.iniciarReceptor();
+
+            // Se envia la solicitud de registro.
             cliente.enviarMensaje(
-                Protocolo.CONECTAR
-            );
+                    Protocolo.CONECTAR
+                            + "|"
+                            + id
+                            + "|"
+                            + nombre);
 
-            // Se recibe la respuesta del servidor.
-            respuesta =
-                cliente.recibirMensaje();
+            mostrarComandos();
 
-            System.out.println(
-                "Servidor: " + respuesta
-            );
+            String comando;
 
-            System.out.println();
+            // Se reciben comandos desde la consola.
+            while (cliente.estaConectado()
+                    && (comando = teclado.readLine()) != null) {
 
-            System.out.println(
-                "Cliente conectado."
-            );
+                comando = comando.trim();
 
-            System.out.println(
-                "Presione ENTER para desconectarse."
-            );
+                if (comando.equalsIgnoreCase(
+                        "SALIR")) {
 
-            // Se utiliza para esperar la entrada desde la consola.
-            BufferedReader teclado =
-                new BufferedReader(
-                    new InputStreamReader(System.in)
-                );
+                    break;
+                }
 
-            try {
+                if (comando.equalsIgnoreCase(
+                        Protocolo.TERMINAR_TURNO)) {
 
-                // Se mantiene el cliente conectado hasta presionar ENTER.
-                teclado.readLine();
+                    cliente.enviarMensaje(
+                            Protocolo.TERMINAR_TURNO);
 
-            } catch (IOException e) {
+                } else if (comando.equalsIgnoreCase(
+                        Protocolo.CONSULTAR_ESTADO)) {
 
-                System.out.println(
-                    "Error al leer la entrada: "
-                    + e.getMessage()
-                );
+                    cliente.enviarMensaje(
+                            Protocolo.CONSULTAR_ESTADO);
+
+                } else if (!comando.isEmpty()) {
+
+                    System.out.println(
+                            "Comando no disponible.");
+                }
             }
 
-            // Se cierra la conexion con el servidor.
+        } catch (IOException e) {
+
+            System.out.println(
+                    "Error al leer la entrada: "
+                            + e.getMessage());
+
+        } finally {
+
             cliente.desconectar();
         }
     }
