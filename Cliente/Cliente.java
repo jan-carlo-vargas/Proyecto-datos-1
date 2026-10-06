@@ -212,15 +212,16 @@ public class Cliente {
 
         System.out.println();
         System.out.println(
-                "Comandos disponibles:");
-
-        System.out.println(
                 "TERMINAR_TURNO");
 
         System.out.println(
-                "SALIR");
+                "CONSULTAR_ESTADO");
 
-        System.out.println();
+        System.out.println(
+                "CONSULTAR_TRANSACCIONES");
+
+        System.out.println(
+                "SALIR");
     }
 
     /**
@@ -228,14 +229,19 @@ public class Cliente {
      *
      * @param args argumentos de ejecucion.
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         BufferedReader teclado = new BufferedReader(
                 new InputStreamReader(
                         System.in));
+        System.out.print("Ingrese la IP del servidor: ");
+        String ipServidor = teclado.readLine().trim();
 
+        if (ipServidor.isEmpty()) {
+            ipServidor = "localhost";
+        }
         Cliente cliente = new Cliente(
-                "localhost",
+                ipServidor,
                 5000);
 
         if (!cliente.conectar()) {
@@ -250,6 +256,12 @@ public class Cliente {
             System.out.println(
                     "Servidor: "
                             + respuestaInicial);
+            if (!Protocolo.CONEXION_OK.equals(
+                    respuestaInicial)) {
+
+                cliente.desconectar();
+                return;
+            }
 
             System.out.print(
                     "Ingrese el ID del jugador: ");
@@ -287,7 +299,6 @@ public class Cliente {
 
                     break;
                 }
-
                 if (comando.equalsIgnoreCase(
                         Protocolo.TERMINAR_TURNO)) {
 
@@ -299,6 +310,12 @@ public class Cliente {
 
                     cliente.enviarMensaje(
                             Protocolo.CONSULTAR_ESTADO);
+
+                } else if (comando.equalsIgnoreCase(
+                        Protocolo.CONSULTAR_TRANSACCIONES)) {
+
+                    cliente.enviarMensaje(
+                            Protocolo.CONSULTAR_TRANSACCIONES);
 
                 } else if (!comando.isEmpty()) {
 
