@@ -1,6 +1,7 @@
 package Servidor;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -46,8 +47,7 @@ public class Servidor {
         this.juego = new Juego();
 
         // Se reserva espacio para los clientes de la partida.
-        this.clientes =
-            new ManejadorCliente[Juego.MAX_JUGADORES];
+        this.clientes = new ManejadorCliente[Juego.MAX_JUGADORES];
 
         this.cantidadClientes = 0;
     }
@@ -60,40 +60,33 @@ public class Servidor {
         try {
 
             // Se crea el servidor en el puerto indicado.
-            servidorSocket =
-                new ServerSocket(puerto);
+            servidorSocket = new ServerSocket(puerto);
 
             activo = true;
 
             System.out.println(
-                "Servidor iniciado."
-            );
+                    "Servidor iniciado.");
 
             System.out.println(
-                "Puerto: " + puerto
-            );
+                    "Puerto: " + puerto);
 
             System.out.println(
-                "Esperando jugadores..."
-            );
+                    "Esperando jugadores...");
 
             // Se aceptan conexiones mientras el servidor este activo.
             while (activo) {
 
                 // Se espera la conexion de un cliente.
-                Socket clienteSocket =
-                    servidorSocket.accept();
+                Socket clienteSocket = servidorSocket.accept();
 
                 System.out.println(
-                    "Cliente conectado desde: "
-                    + clienteSocket
-                        .getInetAddress()
-                        .getHostAddress()
-                );
+                        "Cliente conectado desde: "
+                                + clienteSocket
+                                        .getInetAddress()
+                                        .getHostAddress());
 
                 manejarCliente(
-                    clienteSocket
-                );
+                        clienteSocket);
             }
 
         } catch (IOException e) {
@@ -101,9 +94,8 @@ public class Servidor {
             if (activo) {
 
                 System.out.println(
-                    "Error en el servidor: "
-                    + e.getMessage()
-                );
+                        "Error en el servidor: "
+                                + e.getMessage());
             }
         }
     }
@@ -113,23 +105,46 @@ public class Servidor {
      *
      * @param clienteSocket socket del cliente.
      */
-    private void manejarCliente(
-        Socket clienteSocket
-    ) {
+    private synchronized void manejarCliente(
+            Socket clienteSocket) {
+        System.out.println(
+                "Clientes conectados: "
+                        + cantidadClientes
+                        + "/"
+                        + clientes.length);
+        // Se verifica si el servidor ya posee el maximo de clientes.
+        if (cantidadClientes >= clientes.length) {
 
-        ManejadorCliente manejador =
-            new ManejadorCliente(
+            try {
+
+                PrintWriter salidaTemporal = new PrintWriter(
+                        clienteSocket.getOutputStream(),
+                        true);
+
+                salidaTemporal.println(
+                        "ERROR|SERVIDOR_LLENO");
+
+                clienteSocket.close();
+
+            } catch (IOException e) {
+
+                System.out.println(
+                        "Error al rechazar cliente: "
+                                + e.getMessage());
+            }
+
+            return;
+        }
+
+        ManejadorCliente manejador = new ManejadorCliente(
                 clienteSocket,
                 juego,
-                this
-            );
+                this);
 
         registrarManejador(
-            manejador
-        );
+                manejador);
 
-        Thread hiloCliente =
-            new Thread(manejador);
+        Thread hiloCliente = new Thread(manejador);
 
         hiloCliente.start();
     }
@@ -140,16 +155,11 @@ public class Servidor {
      * @param manejador manejador que se registrara.
      */
     private synchronized void registrarManejador(
-        ManejadorCliente manejador
-    ) {
+            ManejadorCliente manejador) {
 
-        if (
-            cantidadClientes
-            < clientes.length
-        ) {
+        if (cantidadClientes < clientes.length) {
 
-            clientes[cantidadClientes] =
-                manejador;
+            clientes[cantidadClientes] = manejador;
 
             cantidadClientes++;
         }
@@ -161,29 +171,18 @@ public class Servidor {
      * @param manejador manejador que se eliminara.
      */
     public synchronized void eliminarManejador(
-        ManejadorCliente manejador
-    ) {
+            ManejadorCliente manejador) {
 
-        for (
-            int i = 0;
-            i < cantidadClientes;
-            i++
-        ) {
+        for (int i = 0; i < cantidadClientes; i++) {
 
             if (clientes[i] == manejador) {
 
-                for (
-                    int j = i;
-                    j < cantidadClientes - 1;
-                    j++
-                ) {
+                for (int j = i; j < cantidadClientes - 1; j++) {
 
-                    clientes[j] =
-                        clientes[j + 1];
+                    clientes[j] = clientes[j + 1];
                 }
 
-                clientes[cantidadClientes - 1] =
-                    null;
+                clientes[cantidadClientes - 1] = null;
 
                 cantidadClientes--;
 
@@ -198,20 +197,14 @@ public class Servidor {
      * @param mensaje mensaje que se enviara.
      */
     public synchronized void enviarATodos(
-        String mensaje
-    ) {
+            String mensaje) {
 
-        for (
-            int i = 0;
-            i < cantidadClientes;
-            i++
-        ) {
+        for (int i = 0; i < cantidadClientes; i++) {
 
             if (clientes[i] != null) {
 
                 clientes[i].enviarMensaje(
-                    mensaje
-                );
+                        mensaje);
             }
         }
     }
@@ -225,24 +218,20 @@ public class Servidor {
 
         try {
 
-            if (
-                servidorSocket != null
-                && !servidorSocket.isClosed()
-            ) {
+            if (servidorSocket != null
+                    && !servidorSocket.isClosed()) {
 
                 servidorSocket.close();
             }
 
             System.out.println(
-                "Servidor detenido."
-            );
+                    "Servidor detenido.");
 
         } catch (IOException e) {
 
             System.out.println(
-                "Error al cerrar el servidor: "
-                + e.getMessage()
-            );
+                    "Error al cerrar el servidor: "
+                            + e.getMessage());
         }
     }
 
@@ -280,8 +269,7 @@ public class Servidor {
      */
     public static void main(String[] args) {
 
-        Servidor servidor =
-            new Servidor(5000);
+        Servidor servidor = new Servidor(5000);
 
         servidor.iniciar();
     }
