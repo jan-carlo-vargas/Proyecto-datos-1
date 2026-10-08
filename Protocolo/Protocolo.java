@@ -50,6 +50,41 @@ public final class Protocolo {
     public static final String TURNO =
         "TURNO";
 
+    // Se envia a todos con el resultado de los dados:
+    // DADOS|idJugador|dado1|dado2|total
+    public static final String DADOS =
+        "DADOS";
+
+    // Se envia a todos cuando una ficha cae en una casilla:
+    // MOVIMIENTO|idJugador|idCasilla|nombreCasilla
+    public static final String MOVIMIENTO =
+        "MOVIMIENTO";
+
+    // Se envia a todos con lo que ocurrio al caer en una casilla o carta:
+    // EVENTO|mensaje
+    public static final String EVENTO =
+        "EVENTO";
+
+    // Se envia solo al jugador en turno cuando puede comprar la propiedad:
+    // OFERTA_COMPRA|idPropiedad|nombre|precio
+    public static final String OFERTA_COMPRA =
+        "OFERTA_COMPRA";
+
+    // Se envia a todos cuando alguien compra una propiedad:
+    // COMPRA|idJugador|idPropiedad|nombre|precio|saldoNuevo
+    public static final String COMPRA =
+        "COMPRA";
+
+    // Se envia a todos cuando un jugador queda eliminado:
+    // ELIMINADO|idJugador
+    public static final String ELIMINADO =
+        "ELIMINADO";
+
+    // Se envia a todos cuando termina la partida:
+    // FIN_PARTIDA|idGanador
+    public static final String FIN_PARTIDA =
+        "FIN_PARTIDA";
+
     // Se utiliza cuando se recibe un comando no reconocido.
     public static final String ERROR_COMANDO =
         "ERROR|COMANDO_DESCONOCIDO";
@@ -59,4 +94,20 @@ public final class Protocolo {
      */
     private Protocolo() {
     }
+
+    // TABLERO|id:nombre:tipo:precio;id:nombre:tipo:precio;...
+    // tipo: PROPIEDAD, EVENTO o ESPECIAL. Se envia al iniciar la partida.
+    public static final String TABLERO =
+        "TABLERO";
+
+    // ESTADO_JUEGO|idTurno|numeroTurno|maxTurnos|jugadores|duenos
+    // jugadores: id:nombre:saldo:idCasilla:activo(1/0) separados por ;
+    // duenos: idCasilla=idPropietario separados por , (puede ir vacio)
+    public static final String ESTADO_JUEGO =
+        "ESTADO_JUEGO";
+
+    // El cliente lo envia para pedir TABLERO y ESTADO_JUEGO (GUI que entra tarde).
+    public static final String CONSULTAR_TABLERO =
+        "CONSULTAR_TABLERO";
+
 }
