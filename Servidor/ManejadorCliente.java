@@ -10,6 +10,8 @@ import Juego.Juego;
 import Protocolo.Protocolo;
 import dominio.Jugador;
 import dominio.OperacionInvalidaException;
+import dominio.Propiedad;
+import dominio.ResultadoEfecto;
 
 /**
  * Se encarga de manejar la comunicacion con un cliente
@@ -130,19 +132,19 @@ public class ManejadorCliente implements Runnable {
 
             case Protocolo.TIRAR_DADOS:
 
-                // *
+                procesarTirarDados();
 
                 break;
 
             case Protocolo.COMPRAR_PROPIEDAD:
 
-                // *
+                procesarComprarPropiedad();
 
                 break;
 
             case Protocolo.NO_COMPRAR:
 
-                // *
+                procesarNoComprar();
 
                 break;
 
@@ -158,6 +160,17 @@ public class ManejadorCliente implements Runnable {
 
                 break;
 
+            case Protocolo.CONSULTAR_TABLERO:
+
+                if (juego.estaIniciado()) {
+                    enviarMensaje(juego.mensajeTablero());
+                    enviarMensaje(juego.mensajeEstado());
+                } else {
+                    enviarMensaje("ERROR|PARTIDA_NO_INICIADA");
+                }
+
+                break;
+
             case Protocolo.CONSULTAR_TRANSACCIONES:
 
                 procesarConsultarTransacciones();
@@ -170,6 +183,27 @@ public class ManejadorCliente implements Runnable {
                         Protocolo.ERROR_COMANDO);
 
                 break;
+        }
+
+        // Despues de una accion de juego todos reciben el estado completo.
+        if (comando.equals(Protocolo.TIRAR_DADOS)
+                || comando.equals(Protocolo.COMPRAR_PROPIEDAD)
+                || comando.equals(Protocolo.NO_COMPRAR)
+                || comando.equals(Protocolo.TERMINAR_TURNO)) {
+
+            difundirEstado();
+        }
+    }
+
+    /**
+     * Envia ESTADO_JUEGO a todos los clientes (si la partida ya inicio).
+     */
+    private void difundirEstado() {
+
+        String estado = juego.mensajeEstado();
+
+        if (estado != null) {
+            servidor.enviarATodos(estado);
         }
     }
 
@@ -279,6 +313,10 @@ public class ManejadorCliente implements Runnable {
                             + "|"
                             + jugadorActual.getId());
 
+            // Se envia el tablero y el estado inicial para dibujar la interfaz.
+            servidor.enviarATodos(juego.mensajeTablero());
+            difundirEstado();
+
         } catch (OperacionInvalidaException e) {
 
             enviarMensaje(
@@ -331,12 +369,222 @@ public class ManejadorCliente implements Runnable {
                             + "|"
                             + siguiente.getId());
 
+            // Si se alcanzo el limite de turnos, se anuncia el ganador.
+            anunciarFinSiTermino();
+
         } catch (OperacionInvalidaException e) {
 
             enviarMensaje(
                     "ERROR|"
                             + e.getMessage());
         }
+    }
+
+    /**
+     * Se verifica que el cliente este registrado y que la partida este
+     * iniciada. Si no, se le responde el error y se devuelve false.
+     */
+    private boolean validarJugadorEnPartida() {
+
+        if (jugador == null) {
+
+            enviarMensaje(
+                    "ERROR|JUGADOR_NO_REGISTRADO");
+
+            return false;
+        }
+
+        if (!juego.estaIniciado()) {
+
+            enviarMensaje(
+                    "ERROR|PARTIDA_NO_INICIADA");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Se procesa el lanzamiento de los dados (TIRAR_DADOS).
+     *
+     * El servidor valida el turno, sortea los dados, mueve la ficha y ejecuta
+     * la casilla. Despues informa a TODOS los clientes lo que paso, y solo al
+     * jugador en turno le ofrece comprar la propiedad.
+     */
+    private void procesarTirarDados() {
+
+        if (!validarJugadorEnPartida()) {
+
+            return;
+        }
+
+        try {
+
+            ResultadoEfecto resultado =
+                    juego.tirarDados(
+                            jugador.getId());
+
+            servidor.enviarATodos(
+                    Protocolo.DADOS
+                            + "|"
+                            + jugador.getId()
+                            + "|"
+                            + juego.getDado().getValor1()
+                            + "|"
+                            + juego.getDado().getValor2()
+                            + "|"
+                            + juego.getDado().getTotal());
+
+            servidor.enviarATodos(
+                    Protocolo.MOVIMIENTO
+                            + "|"
+                            + jugador.getId()
+                            + "|"
+                            + jugador.getCasillaActual().getId()
+                            + "|"
+                            + jugador.getCasillaActual().getNombre());
+
+            servidor.enviarATodos(
+                    Protocolo.EVENTO
+                            + "|"
+                            + resultado.getMensaje());
+
+            if (resultado.hayPropiedadEnVenta()) {
+
+                Propiedad propiedad =
+                        resultado.getPropiedadEnVenta();
+
+                // Solo el jugador en turno decide si compra.
+                enviarMensaje(
+                        Protocolo.OFERTA_COMPRA
+                                + "|"
+                                + propiedad.getId()
+                                + "|"
+                                + propiedad.getNombre()
+                                + "|"
+                                + propiedad.getPrecio());
+            }
+
+            if (resultado.jugadorEliminado()) {
+
+                servidor.enviarATodos(
+                        Protocolo.ELIMINADO
+                                + "|"
+                                + jugador.getId());
+
+                // El banco ya cerro su turno: se informa quien sigue.
+                if (!anunciarFinSiTermino()) {
+
+                    servidor.enviarATodos(
+                            Protocolo.TURNO
+                                    + "|"
+                                    + juego.obtenerJugadorActual().getId());
+                }
+            }
+
+        } catch (OperacionInvalidaException e) {
+
+            enviarMensaje(
+                    "ERROR|"
+                            + e.getMessage());
+        }
+    }
+
+    /**
+     * Se procesa la compra de la propiedad ofrecida (COMPRAR_PROPIEDAD).
+     */
+    private void procesarComprarPropiedad() {
+
+        if (!validarJugadorEnPartida()) {
+
+            return;
+        }
+
+        try {
+
+            Propiedad propiedad =
+                    juego.getCompraPendiente();
+
+            juego.comprarPropiedadPendiente(
+                    jugador.getId());
+
+            servidor.enviarATodos(
+                    Protocolo.COMPRA
+                            + "|"
+                            + jugador.getId()
+                            + "|"
+                            + propiedad.getId()
+                            + "|"
+                            + propiedad.getNombre()
+                            + "|"
+                            + propiedad.getPrecio()
+                            + "|"
+                            + jugador.getSaldo());
+
+        } catch (OperacionInvalidaException e) {
+
+            enviarMensaje(
+                    "ERROR|"
+                            + e.getMessage());
+        }
+    }
+
+    /**
+     * Se procesa la decision de no comprar (NO_COMPRAR).
+     */
+    private void procesarNoComprar() {
+
+        if (!validarJugadorEnPartida()) {
+
+            return;
+        }
+
+        try {
+
+            Propiedad propiedad =
+                    juego.getCompraPendiente();
+
+            juego.rechazarCompra(
+                    jugador.getId());
+
+            servidor.enviarATodos(
+                    Protocolo.EVENTO
+                            + "|"
+                            + jugador.getNombre()
+                            + " no compro "
+                            + propiedad.getNombre());
+
+        } catch (OperacionInvalidaException e) {
+
+            enviarMensaje(
+                    "ERROR|"
+                            + e.getMessage());
+        }
+    }
+
+    /**
+     * Si la partida termino, se anuncia el ganador a todos los clientes.
+     *
+     * @return true si la partida habia terminado.
+     */
+    private boolean anunciarFinSiTermino() {
+
+        dominio.Banco banco = juego.getBanco();
+
+        if (!banco.partidaTerminada()) {
+
+            return false;
+        }
+
+        Jugador ganador = banco.getGanador();
+
+        servidor.enviarATodos(
+                Protocolo.FIN_PARTIDA
+                        + "|"
+                        + ganador.getId());
+
+        return true;
     }
 
     /**
@@ -389,7 +637,11 @@ public class ManejadorCliente implements Runnable {
                     + "|PROPIEDADES="
                     + jugador.getCantidadPropiedades()
                     + "|ACTIVO="
-                    + jugador.estaActivo();
+                    + jugador.estaActivo()
+                    + "|CASILLA="
+                    + (jugador.getCasillaActual() == null
+                            ? "NINGUNA"
+                            : jugador.getCasillaActual().getId());
 
             enviarMensaje(
                     estado);
