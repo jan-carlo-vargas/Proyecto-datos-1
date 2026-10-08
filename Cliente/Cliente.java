@@ -212,6 +212,15 @@ public class Cliente {
 
         System.out.println();
         System.out.println(
+                "TIRAR_DADOS");
+
+        System.out.println(
+                "COMPRAR_PROPIEDAD");
+
+        System.out.println(
+                "NO_COMPRAR");
+
+        System.out.println(
                 "TERMINAR_TURNO");
 
         System.out.println(
@@ -300,6 +309,24 @@ public class Cliente {
                     break;
                 }
                 if (comando.equalsIgnoreCase(
+                        Protocolo.TIRAR_DADOS)) {
+
+                    cliente.enviarMensaje(
+                            Protocolo.TIRAR_DADOS);
+
+                } else if (comando.equalsIgnoreCase(
+                        Protocolo.COMPRAR_PROPIEDAD)) {
+
+                    cliente.enviarMensaje(
+                            Protocolo.COMPRAR_PROPIEDAD);
+
+                } else if (comando.equalsIgnoreCase(
+                        Protocolo.NO_COMPRAR)) {
+
+                    cliente.enviarMensaje(
+                            Protocolo.NO_COMPRAR);
+
+                } else if (comando.equalsIgnoreCase(
                         Protocolo.TERMINAR_TURNO)) {
 
                     cliente.enviarMensaje(
