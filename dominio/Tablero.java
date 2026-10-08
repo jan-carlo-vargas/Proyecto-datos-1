@@ -1,5 +1,9 @@
 package dominio;
 
+import dominio.Casilla;
+import dominio.CasillaEspecial;
+import dominio.Jugador;
+import dominio.Propiedad;
 import estructuras.Criterio;
 import estructuras.ListaCircularDoble;
 import estructuras.NodoDoble;
@@ -38,6 +42,45 @@ public class Tablero {
         }
 
         this.casillas = casillas;
+    }
+
+        //  TABLERO POR DEFECTO
+
+    /**
+     * Tablero de 24 casillas con tematica de Costa Rica:
+     * 13 propiedades, 5 sorpresas y 6 especiales. Las sorpresas comparten un
+     * unico mazo. Para otra tematica basta con cambiar nombres y precios aqui.
+     */
+    public static Tablero crearPorDefecto() {
+        ListaCircularDoble<Casilla> lista = new ListaCircularDoble<>();
+        estructuras.ColaCircular<CartaEvento> mazo = CartaEvento.crearMazoPorDefecto();
+
+        lista.agregar(new CasillaEspecial(0, "Inicio", CasillaEspecial.Tipo.INICIO));
+        lista.agregar(new Propiedad(1, "Cartago", 60, 6));
+        lista.agregar(new CasillaEvento(2, "Sorpresa", mazo));
+        lista.agregar(new Propiedad(3, "Turrialba", 80, 8));
+        lista.agregar(new CasillaEspecial(4, "Impuesto de ventas", CasillaEspecial.Tipo.IMPUESTO, 100));
+        lista.agregar(new Propiedad(5, "Heredia", 100, 10));
+        lista.agregar(new Propiedad(6, "Alajuela", 100, 10));
+        lista.agregar(new CasillaEvento(7, "Sorpresa", mazo));
+        lista.agregar(new Propiedad(8, "Puntarenas", 120, 12));
+        lista.agregar(new CasillaEspecial(9, "Parque La Sabana", CasillaEspecial.Tipo.DESCANSO));
+        lista.agregar(new Propiedad(10, "Liberia", 140, 14));
+        lista.agregar(new Propiedad(11, "Monteverde", 160, 16));
+        lista.agregar(new CasillaEvento(12, "Sorpresa", mazo));
+        lista.agregar(new Propiedad(13, "Tamarindo", 180, 18));
+        lista.agregar(new CasillaEspecial(14, "Reten", CasillaEspecial.Tipo.CARCEL));
+        lista.agregar(new Propiedad(15, "Manuel Antonio", 200, 20));
+        lista.agregar(new CasillaEvento(16, "Sorpresa", mazo));
+        lista.agregar(new Propiedad(17, "Arenal", 220, 22));
+        lista.agregar(new CasillaEspecial(18, "Ir al reten", CasillaEspecial.Tipo.IR_A_CARCEL));
+        lista.agregar(new Propiedad(19, "Tortuguero", 240, 24));
+        lista.agregar(new CasillaEvento(20, "Sorpresa", mazo));
+        lista.agregar(new Propiedad(21, "Cahuita", 260, 26));
+        lista.agregar(new CasillaEspecial(22, "Impuesto de lujo", CasillaEspecial.Tipo.IMPUESTO, 150));
+        lista.agregar(new Propiedad(23, "Volcan Poas", 300, 30));
+
+        return new Tablero(lista);
     }
 
     //  COLOCAR Y MOVER FICHAS
