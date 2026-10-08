@@ -7,21 +7,13 @@ import estructuras.Visitante;
 
 /**
  * Tablero: el anillo de casillas por donde se mueven los jugadores
- * (punto 5 del enunciado).
  *
- * Usa una ListaCircularDoble<Casilla>: cada nodo es una casilla con referencia
- * a la anterior y a la siguiente, y la ultima vuelve a la primera. Mover una
- * ficha es seguir flechas desde el nodo donde ya esta parada; nunca se busca
- * "la casilla numero 17" desde el principio.
+ * aqui esto es para que cuando un jugador va a avanzar, la posicion donde esta se marque desde donde esta, y kno que la vuelva a buscar desde el inicio 
  *
- * REGLA DE LOS IDS: la casilla en la posicion i tiene id i (0, 1, 2...). La
- * casilla 0 es Inicio. El constructor lo valida, asi una carta que diga "ve a
- * la casilla 13" siempre apunta a donde se espera.
- *
- * EL TABLERO MUEVE FICHAS, NO DINERO.
+ * 
  * moverJugador() avisa si el jugador paso por Inicio, pero NO paga el premio:
  * quien paga es el Banco (Banco.pagarPremioPorInicio), porque toda operacion
- * economica debe pasar por el banco y generar su transaccion (punto 11).
+ * economica debe pasar por el banco y generar su transaccion
  */
 public class Tablero {
 
@@ -51,8 +43,7 @@ public class Tablero {
     //  COLOCAR Y MOVER FICHAS
 
     /**
-     * Pone al jugador en la casilla de Inicio. El Juego lo llama una vez por
-     * jugador al comenzar la partida.
+     * Pone al jugador en la casilla de Inicio. El Juego lo llama una vez por jugador al comenzar la partida
      */
     public void colocarEnInicio(Jugador jugador) {
         validarJugador(jugador);
@@ -60,9 +51,9 @@ public class Tablero {
     }
 
     /**
-     * Mueve al jugador 'pasos' casillas hacia ADELANTE.
-     * Devuelve true si en el camino paso por Inicio (o cayo justo en el):
-     * el Juego usa ese true para pedirle al Banco el premio.
+     * Mueve al jugador pasos casillas hacia ADELANTE.
+     * Devuelve true si en el camino paso por Inici
+     * el Juego usa ese true para pedirle al Banco el premio
      */
     public boolean moverJugador(Jugador jugador, int pasos) {
         NodoDoble<Casilla> origen = posicionDe(jugador);
@@ -74,8 +65,8 @@ public class Tablero {
     }
 
     /**
-     * Mueve al jugador 'pasos' casillas hacia ATRAS. Retroceder nunca cobra el
-     * premio de inicio, por eso no devuelve nada.
+     * Mueve al jugador paso casillas hacia ATRAS. Retroceder nunca cobra el
+     * premio de inicio, por eso no devuelve nada
      */
     public void retrocederJugador(Jugador jugador, int pasos) {
         NodoDoble<Casilla> origen = posicionDe(jugador);
@@ -86,8 +77,8 @@ public class Tablero {
 
     /**
      * Mueve al jugador HACIA ADELANTE hasta la casilla con ese id (carta "ve a
-     * la casilla X"). Devuelve true si pasa por Inicio en el camino.
-     * Si ya esta parado en esa casilla se queda ahi y no cobra nada.
+     * la casilla X"). Devuelve true si pasa por Inicio en el camino
+     * Si ya esta parado en esa casilla se queda ahi y no cobra nada
      */
     public boolean moverACasilla(Jugador jugador, int idCasilla) {
         NodoDoble<Casilla> origen = posicionDe(jugador);
@@ -102,7 +93,7 @@ public class Tablero {
 
     /**
      * Coloca al jugador en una casilla SIN recorrer el camino y sin premio de
-     * inicio. Es el "teletransporte" de ir a la carcel.
+     * inicio, Es el "teletransporte" de ir a la carcel
      */
     public void enviarACasilla(Jugador jugador, int idCasilla) {
         validarJugador(jugador);
@@ -124,8 +115,7 @@ public class Tablero {
     }
 
     /**
-     * Primera casilla que cumple el criterio, o null. Ejemplo:
-     *   tablero.buscarCasilla(c -> c.getNombre().equals("Tamarindo"));
+     * Primera casilla que cumple el criterio, o null. 
      */
     public Casilla buscarCasilla(Criterio<Casilla> criterio) {
         NodoDoble<Casilla> nodo = casillas.buscarNodo(criterio);
