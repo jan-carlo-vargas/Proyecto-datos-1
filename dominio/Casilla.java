@@ -1,22 +1,7 @@
 package dominio;
 
 /**
- * Casilla: clase base de todas las casillas del tablero (punto 6 del enunciado).
- *
- * CONTRATO ACORDADO CON EL ENCARGADO DEL TABLERO
- * Esta version tiene lo minimo que necesitan Jugador y Banco para funcionar.
- * Quien programe CasillaEvento, CasillaEspecial y el Tablero puede agregarle
- * todo lo que le haga falta, pero no debe cambiar las firmas que ya estan aqui,
- * porque el banco las usa.
- *
- * Es ABSTRACTA porque una casilla "generica" no existe en el tablero: toda
- * casilla es una propiedad, un evento o una especial. Declararla abstracta
- * impide que alguien escriba new Casilla(...) por error.
- *
- * El metodo ejecutarEfecto() tampoco tiene cuerpo aqui: cada subclase lo
- * resuelve a su manera. Eso es el polimorfismo que pide el punto 6. El tablero
- * puede llamar casilla.ejecutarEfecto(jugador) sin preguntar de que tipo es;
- * Java elige sola la version correcta.
+ * Casilla: clase base de todas las casillas del tablero
  */
 public abstract class Casilla {
 
@@ -51,6 +36,18 @@ public abstract class Casilla {
      * valida el saldo y quien genera la transaccion es siempre el Banco.
      */
     public abstract void ejecutarEfecto(Jugador jugador);
+
+    
+    /**
+     * Version completa del efecto, la que usa el Juego. Recibe el Banco y el
+     * Tablero porque un efecto real necesita cobrar (Banco) y mover fichas
+     * (Tablero), y la firma de un solo parametro no alcanza para eso.
+     *
+     */
+    public ResultadoEfecto ejecutarEfecto(Jugador jugador, Banco banco, Tablero tablero) {
+        ejecutarEfecto(jugador);
+        return ResultadoEfecto.informativo(jugador.getNombre() + " cayo en " + nombre);
+    }
 
     public int getId() {
         return id;

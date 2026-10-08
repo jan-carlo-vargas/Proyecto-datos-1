@@ -52,6 +52,38 @@ public class Propiedad extends Casilla {
         // Sin efecto propio: el movimiento de dinero lo hace el Banco.
     }
 
+        /**
+     * El efecto real de caer aqui, aplicando las tres reglas del punto 7:
+     *   - disponible        -> se le OFRECE comprarla (no se compra sola: el
+     *                          jugador decide con COMPRAR_PROPIEDAD o NO_COMPRAR)
+     *   - de otro jugador   -> paga alquiler, y si no alcanza queda eliminado
+     *   - del mismo jugador -> no pasa nada
+     * El dinero lo mueve siempre el Banco; aqui solo se decide que corresponde.
+     */
+    @Override
+    public ResultadoEfecto ejecutarEfecto(Jugador jugador, Banco banco, Tablero tablero) {
+        String quien = jugador.getNombre();
+
+        if (estaDisponible()) {
+            return ResultadoEfecto.ofrecerCompra(this,
+                    quien + " cayo en " + nombre + ", disponible por " + precio);
+        }
+
+        if (esDe(jugador)) {
+            return ResultadoEfecto.informativo(quien + " cayo en " + nombre + ", que ya es suya");
+        }
+
+        if (alquiler == 0) {
+            return ResultadoEfecto.informativo(nombre + " de " + propietario.getNombre() + " no cobra alquiler");
+        }
+
+        boolean sigue = banco.pagarAlquiler(jugador, this);
+        ResultadoEfecto pago = ResultadoEfecto.informativo(
+                quien + " paga " + alquiler + " de alquiler de " + nombre + " a " + propietario.getNombre());
+
+        return sigue ? pago : pago.conEliminado();
+    }
+
     /**
      * true si todavia no tiene duenio y se puede comprar.
      */

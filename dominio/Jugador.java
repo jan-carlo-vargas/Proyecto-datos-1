@@ -40,6 +40,11 @@ public class Jugador {
     // false cuando queda eliminado por bancarrota (punto 18).
     private boolean activo;
 
+    // Cuantos turnos le faltan por perder (carta "pierde un turno" o reten).
+    // El Juego lo consulta al pasar el turno y lo consume con
+    // consumirTurnoPerdido(). Lo modifican las cartas y casillas, nunca el cliente.
+    private int turnosPorPerder;
+
     // La lista es final: la referencia no cambia, pero su contenido si.
     private final ListaDoble<Propiedad> propiedades;
 
@@ -224,6 +229,35 @@ public class Jugador {
 
     public int getCantidadPropiedades() {
         return propiedades.getCantidad();
+    }
+
+    //  TURNOS PERDIDOS (punto 10: carta "perder un turno")
+
+    /**
+     * Anota que el jugador perdera su proximo turno. Si ya tenia uno pendiente
+     * se acumulan.
+     */
+    public void perderProximoTurno() {
+        turnosPorPerder++;
+    }
+
+    public boolean debePerderTurno() {
+        return turnosPorPerder > 0;
+    }
+
+    /**
+     * Gasta un turno perdido. El Juego lo llama cuando le toca jugar a este
+     * jugador y, en vez de dejarlo actuar, pasa directo al siguiente.
+     */
+    public void consumirTurnoPerdido() {
+        if (turnosPorPerder <= 0) {
+            throw new IllegalStateException(nombre + " no tiene turnos por perder");
+        }
+        turnosPorPerder--;
+    }
+
+    public int getTurnosPorPerder() {
+        return turnosPorPerder;
     }
 
     //  VALIDACIONES INTERNAS
