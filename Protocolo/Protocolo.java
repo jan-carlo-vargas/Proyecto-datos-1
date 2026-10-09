@@ -70,6 +70,11 @@ public final class Protocolo {
     public static final String OFERTA_COMPRA =
         "OFERTA_COMPRA";
 
+    // Se envia a todos cuando el jugador rechaza una oferta de compra:
+    // OFERTA_RECHAZADA|idJugador
+    public static final String OFERTA_RECHAZADA =
+        "OFERTA_RECHAZADA";
+
     // Se envia a todos cuando alguien compra una propiedad:
     // COMPRA|idJugador|idPropiedad|nombre|precio|saldoNuevo
     public static final String COMPRA =
@@ -109,5 +114,31 @@ public final class Protocolo {
     // El cliente lo envia para pedir TABLERO y ESTADO_JUEGO (GUI que entra tarde).
     public static final String CONSULTAR_TABLERO =
         "CONSULTAR_TABLERO";
+
+    // Puerto TCP unico del servidor: lo usan los clientes del juego y el
+    // modulo electronico (Raspberry Pi Pico W).
+    public static final int PUERTO = 6000;
+
+    // El cliente pide exportar el historial a TXT (punto 13).
+    // El servidor responde: EXPORTADO|rutaDelArchivo
+    public static final String EXPORTAR_TRANSACCIONES =
+        "EXPORTAR_TRANSACCIONES";
+
+    public static final String EXPORTADO =
+        "EXPORTADO";
+
+    // ---- Modulo electronico (mensajes JSON, una linea por mensaje) ----
+    // Pico -> servidor:
+    //   {"accion":"CONECTAR_DISPOSITIVO"}                      (al conectarse)
+    //   {"accion":"RESULTADO_DADOS","valor":7}                 (suma 2 a 12)
+    //   {"accion":"IDENTIFICAR_JUGADOR","uid":"a1b2c3d4"}
+    // Servidor -> Pico:
+    //   {"accion":"ACTIVAR_DADOS","jugador":"1","nombre":"Ana"}
+    //   {"accion":"LEER_TARJETA","jugador":"1","nombre":"Ana","motivo":"...","monto":"60"}
+    //   {"accion":"DESACTIVAR"}                                (cancela la espera)
+    //   {"accion":"RFID_OK"|"RFID_ERROR"|"DADO_ERROR","mensaje":"..."} (informativos)
+    public static final String DISP_CONECTAR = "CONECTAR_DISPOSITIVO";
+    public static final String DISP_IDENTIFICAR = "IDENTIFICAR_JUGADOR";
+    public static final String DISP_RESULTADO_DADO = "RESULTADO_DADOS";
 
 }

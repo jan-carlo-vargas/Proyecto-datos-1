@@ -48,6 +48,10 @@ public class Jugador {
     // La lista es final: la referencia no cambia, pero su contenido si.
     private final ListaDoble<Propiedad> propiedades;
 
+    // UID de la tarjeta RFID asociada al jugador (null si aun no tiene). La
+    // tarjeta solo identifica: el saldo oficial vive aqui, en el servidor.
+    private String uidTarjeta;
+
     public Jugador(String id, String nombre, int saldoInicial) {
         if (id == null || id.trim().isEmpty()) {
             throw new IllegalArgumentException("El jugador necesita un identificador");
@@ -213,6 +217,15 @@ public class Jugador {
 
     public String getId() {
         return id;
+    }
+
+    public String getUidTarjeta() {
+        return uidTarjeta;
+    }
+
+    /** Lo llama Juego.identificarTarjeta() la primera vez que se lee su tarjeta. */
+    public void setUidTarjeta(String uidTarjeta) {
+        this.uidTarjeta = uidTarjeta;
     }
 
     public String getNombre() {

@@ -1,5 +1,6 @@
 package Cliente;
 
+import Protocolo.Protocolo;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -75,6 +76,7 @@ public class VentanaJuego extends JFrame {
     private final JButton btnTerminar = new JButton("Terminar turno");
     private final JButton btnHistorial = new JButton("Historial");
     private final JButton btnTransacciones = new JButton("Transacciones");
+    private final JButton btnExportar = new JButton("Exportar TXT");
     private final PanelJugadores panelJugadores = new PanelJugadores();
     private JScrollPane scrollRegistro;
 
@@ -122,13 +124,14 @@ public class VentanaJuego extends JFrame {
         scroll.setPreferredSize(new Dimension(260, 200));
         scrollRegistro = scroll;
 
-        JPanel botones = new JPanel(new GridLayout(6, 1, 4, 4));
+        JPanel botones = new JPanel(new GridLayout(7, 1, 4, 4));
         botones.add(btnTirar);
         botones.add(btnComprar);
         botones.add(btnNoComprar);
         botones.add(btnTerminar);
         botones.add(btnHistorial);
         botones.add(btnTransacciones);
+        botones.add(btnExportar);
 
         lblEstado.setForeground(new Color(0x212121));
         lblEstado.setFont(new Font("SansSerif", Font.BOLD, 13));
@@ -157,6 +160,7 @@ public class VentanaJuego extends JFrame {
             repaint();
         });
         btnTransacciones.addActionListener(e -> enviar("CONSULTAR_TRANSACCIONES"));
+        btnExportar.addActionListener(e -> enviar("EXPORTAR_TRANSACCIONES"));
 
         actualizarBotones();
         setMinimumSize(new Dimension(900, 700));
@@ -172,6 +176,7 @@ public class VentanaJuego extends JFrame {
         btnTerminar.setEnabled(miTurno && yaTiro && !hayOferta);
         btnHistorial.setEnabled(true);
         btnTransacciones.setEnabled(true);
+        btnExportar.setEnabled(true);
     }
 
     private void log(String texto) {
@@ -227,6 +232,11 @@ public class VentanaJuego extends JFrame {
                     hayOferta = true;
                 }
                 break;
+            case "OFERTA_RECHAZADA":
+                if (p.length > 1 && p[1].equals(miId)) {
+                    hayOferta = false;
+                }
+                break;
             case "COMPRA":
                 hayOferta = false;
                 log(nombreDe(p[1]) + " compro " + p[3] + " por " + p[4]);
@@ -242,6 +252,9 @@ public class VentanaJuego extends JFrame {
                 break;
             case "TRANSACCIONES":
                 mostrarHistorial(linea.substring("TRANSACCIONES|".length()));
+                break;
+            case "EXPORTADO":
+                log("Reporte TXT generado en el servidor: " + (p.length > 1 ? p[1] : ""));
                 break;
             case "ERROR":
                 log("Error: " + (p.length > 1 ? p[1] : ""));
@@ -595,10 +608,12 @@ public class VentanaJuego extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             JTextField ip = new JTextField("localhost");
-            JTextField puerto = new JTextField("5000");
+            JTextField puerto = new JTextField(String.valueOf(Protocolo.PUERTO));
             JTextField id = new JTextField("1");
             JTextField nombre = new JTextField("Jugador");
-            JPanel form = new JPanel(new GridLayout(4, 2, 4, 4));
+            javax.swing.JCheckBox organizador = new javax.swing.JCheckBox("Soy el organizador (aloja el banco)");
+            JTextField maxTurnos = new JTextField("100");
+            JPanel form = new JPanel(new GridLayout(6, 2, 4, 4));
             form.add(new JLabel("IP del servidor:"));
             form.add(ip);
             form.add(new JLabel("Puerto:"));
@@ -607,15 +622,34 @@ public class VentanaJuego extends JFrame {
             form.add(id);
             form.add(new JLabel("Nombre:"));
             form.add(nombre);
+            form.add(organizador);
+            form.add(new JLabel(""));
+            form.add(new JLabel("Max. turnos (organizador):"));
+            form.add(maxTurnos);
 
             if (JOptionPane.showConfirmDialog(null, form, "Conectar al Monopoly", JOptionPane.OK_CANCEL_OPTION)
                     != JOptionPane.OK_OPTION) {
                 return;
             }
             try {
-                new VentanaJuego(ip.getText().trim(), Integer.parseInt(puerto.getText().trim()),
+                String direccion = ip.getText().trim();
+                int numeroPuerto = Integer.parseInt(puerto.getText().trim());
+
+                if (organizador.isSelected()) {
+                    // El organizador aloja el banco: se levanta el servidor en
+                    // este mismo programa y se conecta a si mismo.
+                    final Servidor.Servidor servidor =
+                            new Servidor.Servidor(numeroPuerto, Integer.parseInt(maxTurnos.getText().trim()));
+                    Thread hiloServidor = new Thread(servidor::iniciar, "servidor-banco");
+                    hiloServidor.setDaemon(true);
+                    hiloServidor.start();
+                    Thread.sleep(500);
+                    direccion = "localhost";
+                }
+
+                new VentanaJuego(direccion, numeroPuerto,
                         id.getText().trim(), nombre.getText().trim()).setVisible(true);
-            } catch (IOException | NumberFormatException e) {
+            } catch (IOException | NumberFormatException | InterruptedException e) {
                 JOptionPane.showMessageDialog(null, "No se pudo conectar: " + e.getMessage());
             }
         });

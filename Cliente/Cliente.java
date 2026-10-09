@@ -230,6 +230,9 @@ public class Cliente {
                 "CONSULTAR_TRANSACCIONES");
 
         System.out.println(
+                "EXPORTAR_TRANSACCIONES");
+
+        System.out.println(
                 "SALIR");
     }
 
@@ -251,7 +254,7 @@ public class Cliente {
         }
         Cliente cliente = new Cliente(
                 ipServidor,
-                5000);
+                Protocolo.PUERTO);
 
         if (!cliente.conectar()) {
             return;
@@ -343,6 +346,12 @@ public class Cliente {
 
                     cliente.enviarMensaje(
                             Protocolo.CONSULTAR_TRANSACCIONES);
+
+                } else if (comando.equalsIgnoreCase(
+                        Protocolo.EXPORTAR_TRANSACCIONES)) {
+
+                    cliente.enviarMensaje(
+                            Protocolo.EXPORTAR_TRANSACCIONES);
 
                 } else if (!comando.isEmpty()) {
 
