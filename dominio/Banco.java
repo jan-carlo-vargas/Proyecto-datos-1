@@ -101,6 +101,33 @@ public class Banco {
     }
 
     /**
+     * Saca a un jugador de la cola ANTES de empezar la partida (se desconecto
+     * en el vestibulo). Durante la partida se usa eliminarJugador().
+     */
+    public void quitarJugador(Jugador jugador) {
+        validarJugador(jugador);
+        turnos.eliminar(jugador);
+    }
+
+    /**
+     * El jugador que sigue despues de este en la cola de turnos (para la carta
+     * de pago entre jugadores). null si no esta en la cola.
+     */
+    public Jugador siguienteDe(Jugador jugador) {
+        Jugador[] orden = new Jugador[turnos.getCantidad()];
+        int[] n = { 0 };
+
+        turnos.recorrer(j -> orden[n[0]++] = j);
+
+        for (int i = 0; i < orden.length; i++) {
+            if (orden[i].equals(jugador)) {
+                return orden[(i + 1) % orden.length];
+            }
+        }
+        return null;
+    }
+
+    /**
      * A quien le toca jugar ahora. Es verFrente(), que mira sin sacar de la
      * cola: el jugador tiene que seguir ahi hasta que termine su turno.
      */

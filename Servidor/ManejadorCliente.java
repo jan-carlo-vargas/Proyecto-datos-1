@@ -10,90 +10,83 @@ import Juego.Juego;
 import Protocolo.Protocolo;
 import dominio.Jugador;
 import dominio.OperacionInvalidaException;
-import dominio.Propiedad;
-import dominio.ResultadoEfecto;
 
 /**
- * Se encarga de manejar la comunicacion con un cliente
- * conectado al servidor.
+ * Se encarga de manejar la comunicacion con UNA conexion del servidor.
+ *
+ * La conexion puede ser de dos tipos y se distingue por el primer mensaje:
+ *   - cliente del juego: mensajes de texto separados por "|";
+ *   - modulo electronico (Pico W): mensajes JSON, la linea empieza con "{".
+ *
+ * Aqui solo se interpretan los mensajes; las reglas viven en Juego y Banco, y
+ * la coordinacion con el modulo electronico en Servidor.
  */
 public class ManejadorCliente implements Runnable {
 
-    // Socket correspondiente al cliente conectado.
     private final Socket socketCliente;
 
-    // Se utiliza como partida compartida por los clientes.
     private final Juego juego;
 
-    // Se utiliza para acceder al servidor principal.
     private final Servidor servidor;
 
-    // Se utiliza para recibir mensajes del cliente.
     private BufferedReader entrada;
 
-    // Se utiliza para enviar mensajes al cliente.
     private PrintWriter salida;
 
-    // Se almacena el jugador asociado con este cliente.
-    private Jugador jugador;
+    // Jugador asociado con este cliente (null si es el modulo o no se registro).
+    private volatile Jugador jugador;
 
-    /**
-     * Se crea un manejador para el cliente recibido.
-     *
-     * @param socketCliente socket correspondiente al cliente.
-     * @param juego         partida compartida por el servidor.
-     * @param servidor      servidor principal.
-     */
-    public ManejadorCliente(
-            Socket socketCliente,
-            Juego juego,
-            Servidor servidor) {
+    // true si esta conexion es el modulo electronico.
+    private volatile boolean esDispositivo;
+
+    public ManejadorCliente(Socket socketCliente, Juego juego, Servidor servidor) {
 
         this.socketCliente = socketCliente;
-
         this.juego = juego;
-
         this.servidor = servidor;
-
         this.jugador = null;
+        this.esDispositivo = false;
     }
 
-    /**
-     * Se inicia la comunicacion con el cliente.
-     */
+    public Jugador getJugador() {
+        return jugador;
+    }
+
     @Override
     public void run() {
 
         try {
 
-            entrada = new BufferedReader(
-                    new InputStreamReader(
-                            socketCliente.getInputStream()));
+            entrada = new BufferedReader(new InputStreamReader(socketCliente.getInputStream()));
+            salida = new PrintWriter(socketCliente.getOutputStream(), true);
 
-            salida = new PrintWriter(
-                    socketCliente.getOutputStream(),
-                    true);
-
-            enviarMensaje(
-                    Protocolo.CONEXION_OK);
+            enviarMensaje(Protocolo.CONEXION_OK);
 
             String mensaje;
 
             while ((mensaje = entrada.readLine()) != null) {
 
-                System.out.println(
-                        "Mensaje recibido: "
-                                + mensaje);
+                System.out.println("Mensaje recibido: " + mensaje);
 
-                procesarMensaje(
-                        mensaje);
+                try {
+
+                    if (mensaje.trim().startsWith("{")) {
+                        procesarDispositivo(mensaje.trim());
+                    } else {
+                        procesarMensaje(mensaje);
+                    }
+
+                } catch (RuntimeException e) {
+
+                    // Un error inesperado no debe matar la conexion del jugador.
+                    System.out.println("Error procesando '" + mensaje + "': " + e);
+                    enviarMensaje("ERROR|ERROR_INTERNO");
+                }
             }
 
         } catch (IOException e) {
 
-            System.out.println(
-                    "Cliente desconectado: "
-                            + e.getMessage());
+            System.out.println("Cliente desconectado: " + e.getMessage());
 
         } finally {
 
@@ -101,21 +94,75 @@ public class ManejadorCliente implements Runnable {
         }
     }
 
-    /**
-     * Se procesa el mensaje recibido desde el cliente.
-     *
-     * @param mensaje mensaje recibido.
-     */
-    private void procesarMensaje(
-            String mensaje) {
+    //  MODULO ELECTRONICO (JSON)
+
+    private void procesarDispositivo(String json) {
+
+        String accion = Json.leer(json, "accion");
+
+        if (accion == null) {
+            enviarMensaje(Json.construir("ERROR", "mensaje", "Falta la accion"));
+            return;
+        }
+
+        if (jugador != null) {
+            enviarMensaje(Json.construir("ERROR", "mensaje", "Esta conexion es de un jugador"));
+            return;
+        }
+
+        // Cualquier mensaje JSON identifica a la conexion como el modulo.
+        if (!esDispositivo) {
+
+            if (!servidor.registrarDispositivo(this)) {
+                enviarMensaje(Json.construir("ERROR", "mensaje", "Ya hay un modulo electronico conectado"));
+                return;
+            }
+
+            esDispositivo = true;
+            enviarMensaje(Json.construir("DISPOSITIVO_OK"));
+        }
+
+        switch (accion) {
+
+            case Protocolo.DISP_CONECTAR:
+                break;
+
+            case Protocolo.DISP_IDENTIFICAR:
+                String uid = Json.leer(json, "uid");
+                servidor.recibirTarjeta(uid);
+                break;
+
+            case Protocolo.DISP_RESULTADO_DADO:
+                int d1 = Json.leerEntero(json, "dado1");
+                int d2 = Json.leerEntero(json, "dado2");
+
+                // Si solo llega el total (2 a 12) se reparte en dos dados validos.
+                if (d1 < 0 || d2 < 0) {
+                    int total = Json.leerEntero(json, "valor");
+                    if (total < 0) {
+                        total = Json.leerEntero(json, "total");
+                    }
+                    d1 = total / 2;
+                    d2 = total - d1;
+                }
+
+                servidor.recibirDado(d1, d2);
+                break;
+
+            default:
+                enviarMensaje(Json.construir("ERROR", "mensaje", "Accion desconocida: " + accion));
+                break;
+        }
+    }
+
+    //  CLIENTES DEL JUEGO
+
+    private void procesarMensaje(String mensaje) {
 
         String[] partes = mensaje.split("\\|");
 
         if (partes.length == 0) {
-
-            enviarMensaje(
-                    Protocolo.ERROR_COMANDO);
-
+            enviarMensaje(Protocolo.ERROR_COMANDO);
             return;
         }
 
@@ -124,40 +171,27 @@ public class ManejadorCliente implements Runnable {
         switch (comando) {
 
             case Protocolo.CONECTAR:
-
-                procesarConexion(
-                        partes);
-
+                procesarConexion(partes);
                 break;
 
             case Protocolo.TIRAR_DADOS:
-
-                procesarTirarDados();
-
+                accionDeJuego(comando);
                 break;
 
             case Protocolo.COMPRAR_PROPIEDAD:
-
-                procesarComprarPropiedad();
-
+                accionDeJuego(comando);
                 break;
 
             case Protocolo.NO_COMPRAR:
-
-                procesarNoComprar();
-
+                accionDeJuego(comando);
                 break;
 
             case Protocolo.TERMINAR_TURNO:
-
-                procesarTerminarTurno();
-
+                accionDeJuego(comando);
                 break;
 
             case Protocolo.CONSULTAR_ESTADO:
-
                 procesarConsultarEstado();
-
                 break;
 
             case Protocolo.CONSULTAR_TABLERO:
@@ -168,566 +202,246 @@ public class ManejadorCliente implements Runnable {
                 } else {
                     enviarMensaje("ERROR|PARTIDA_NO_INICIADA");
                 }
-
                 break;
 
             case Protocolo.CONSULTAR_TRANSACCIONES:
-
                 procesarConsultarTransacciones();
+                break;
 
+            case Protocolo.EXPORTAR_TRANSACCIONES:
+                procesarExportar();
                 break;
 
             default:
-
-                enviarMensaje(
-                        Protocolo.ERROR_COMANDO);
-
+                enviarMensaje(Protocolo.ERROR_COMANDO);
                 break;
         }
-
-        // Despues de una accion de juego todos reciben el estado completo.
-        if (comando.equals(Protocolo.TIRAR_DADOS)
-                || comando.equals(Protocolo.COMPRAR_PROPIEDAD)
-                || comando.equals(Protocolo.NO_COMPRAR)
-                || comando.equals(Protocolo.TERMINAR_TURNO)) {
-
-            difundirEstado();
-        }
     }
 
     /**
-     * Envia ESTADO_JUEGO a todos los clientes (si la partida ya inicio).
+     * Las cuatro acciones que cambian el estado de la partida. El servidor
+     * valida todo (turno, saldo, dados, fin de partida); el cliente solo pide.
      */
-    private void difundirEstado() {
+    private void accionDeJuego(String comando) {
 
-        String estado = juego.mensajeEstado();
-
-        if (estado != null) {
-            servidor.enviarATodos(estado);
-        }
-    }
-
-    /**
-     * Se procesa la solicitud de registro de un jugador.
-     *
-     * @param partes partes recibidas en el mensaje.
-     */
-    private void procesarConexion(
-            String[] partes) {
-
-        if (jugador != null) {
-
-            enviarMensaje(
-                    "ERROR|CLIENTE_YA_REGISTRADO");
-
-            return;
-        }
-
-        if (partes.length != 3) {
-
-            enviarMensaje(
-                    "ERROR|FORMATO_CONECTAR");
-
-            return;
-        }
-
-        String id = partes[1].trim();
-
-        String nombre = partes[2].trim();
-
-        if (id.isEmpty()
-                || nombre.isEmpty()) {
-
-            enviarMensaje(
-                    "ERROR|DATOS_JUGADOR");
-
+        if (!validarJugadorEnPartida()) {
             return;
         }
 
         try {
 
-            jugador = juego.registrarJugador(
-                    id,
-                    nombre);
+            switch (comando) {
 
-            enviarMensaje(
-                    Protocolo.CONECTADO
-                            + "|"
-                            + jugador.getId()
-                            + "|"
-                            + jugador.getNombre());
+                case Protocolo.TIRAR_DADOS:
+                    servidor.tirarDados(jugador);
+                    break;
 
-            System.out.println(
-                    "Jugador registrado: "
-                            + jugador.getId()
-                            + " - "
-                            + jugador.getNombre());
+                case Protocolo.COMPRAR_PROPIEDAD:
+                    servidor.comprar(jugador);
+                    break;
 
-            System.out.println(
-                    "Jugadores en la partida: "
-                            + juego.getCantidadJugadores()
-                            + "/"
-                            + Juego.MAX_JUGADORES);
+                case Protocolo.NO_COMPRAR:
+                    servidor.noComprar(jugador);
+                    break;
+
+                default:
+                    servidor.terminarTurno(jugador);
+                    break;
+            }
+
+        } catch (OperacionInvalidaException e) {
+
+            enviarMensaje("ERROR|" + e.getMessage());
+        }
+    }
+
+    private void procesarConexion(String[] partes) {
+
+        if (jugador != null) {
+            enviarMensaje("ERROR|CLIENTE_YA_REGISTRADO");
+            return;
+        }
+
+        if (esDispositivo) {
+            enviarMensaje("ERROR|CONEXION_DE_DISPOSITIVO");
+            return;
+        }
+
+        if (partes.length != 3) {
+            enviarMensaje("ERROR|FORMATO_CONECTAR");
+            return;
+        }
+
+        String id = partes[1].trim();
+        String nombre = partes[2].trim();
+
+        if (id.isEmpty() || nombre.isEmpty()) {
+            enviarMensaje("ERROR|DATOS_JUGADOR");
+            return;
+        }
+
+        try {
+
+            jugador = juego.registrarJugador(id, nombre);
+
+            enviarMensaje(Protocolo.CONECTADO + "|" + jugador.getId() + "|" + jugador.getNombre());
+
+            System.out.println("Jugador registrado: " + jugador.getId() + " - " + jugador.getNombre());
+            System.out.println("Jugadores en la partida: "
+                    + juego.getCantidadJugadores() + "/" + Juego.MAX_JUGADORES);
 
             // Se inicia la partida cuando se registran cuatro jugadores.
-            if (juego.getCantidadJugadores() == Juego.MAX_JUGADORES
-                    && !juego.estaIniciado()) {
-
+            if (juego.getCantidadJugadores() == Juego.MAX_JUGADORES && !juego.estaIniciado()) {
                 iniciarPartida();
             }
 
         } catch (OperacionInvalidaException e) {
 
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
+            enviarMensaje("ERROR|" + e.getMessage());
         }
     }
 
-    /**
-     * Se inicia la partida y se informa el primer turno.
-     */
     private void iniciarPartida() {
 
         try {
 
-            // Se inicia la partida compartida.
             juego.iniciarPartida();
 
             Jugador jugadorActual = juego.obtenerJugadorActual();
 
-            System.out.println(
-                    "Partida iniciada.");
+            System.out.println("Partida iniciada.");
+            System.out.println("Primer turno: " + jugadorActual.getId());
 
-            System.out.println(
-                    "Primer turno: "
-                            + jugadorActual.getId());
-
-            // Se informa a todos que la partida fue iniciada.
-            servidor.enviarATodos(
-                    Protocolo.PARTIDA_INICIADA);
-
-            // Se informa a todos cual jugador posee el turno.
-            servidor.enviarATodos(
-                    Protocolo.TURNO
-                            + "|"
-                            + jugadorActual.getId());
-
-            // Se envia el tablero y el estado inicial para dibujar la interfaz.
+            servidor.enviarATodos(Protocolo.PARTIDA_INICIADA);
+            servidor.enviarATodos(Protocolo.TURNO + "|" + jugadorActual.getId());
             servidor.enviarATodos(juego.mensajeTablero());
-            difundirEstado();
+            servidor.difundirEstado();
 
         } catch (OperacionInvalidaException e) {
 
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
+            enviarMensaje("ERROR|" + e.getMessage());
         }
     }
 
-    /**
-     * Se procesa la solicitud para terminar un turno.
-     */
-    private void procesarTerminarTurno() {
-
-        if (jugador == null) {
-
-            enviarMensaje(
-                    "ERROR|JUGADOR_NO_REGISTRADO");
-
-            return;
-        }
-
-        if (!juego.estaIniciado()) {
-
-            enviarMensaje(
-                    "ERROR|PARTIDA_NO_INICIADA");
-
-            return;
-        }
-
-        try {
-
-            // Se solicita terminar el turno del jugador.
-            juego.terminarTurno(
-                    jugador.getId());
-
-            // Se obtiene el siguiente jugador de la cola.
-            Jugador siguiente = juego.obtenerJugadorActual();
-
-            System.out.println(
-                    "Turno terminado por: "
-                            + jugador.getId());
-
-            System.out.println(
-                    "Nuevo turno: "
-                            + siguiente.getId());
-
-            // Se informa el nuevo turno a todos los clientes.
-            servidor.enviarATodos(
-                    Protocolo.TURNO
-                            + "|"
-                            + siguiente.getId());
-
-            // Si se alcanzo el limite de turnos, se anuncia el ganador.
-            anunciarFinSiTermino();
-
-        } catch (OperacionInvalidaException e) {
-
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
-        }
-    }
-
-    /**
-     * Se verifica que el cliente este registrado y que la partida este
-     * iniciada. Si no, se le responde el error y se devuelve false.
-     */
     private boolean validarJugadorEnPartida() {
 
         if (jugador == null) {
-
-            enviarMensaje(
-                    "ERROR|JUGADOR_NO_REGISTRADO");
-
+            enviarMensaje("ERROR|JUGADOR_NO_REGISTRADO");
             return false;
         }
 
         if (!juego.estaIniciado()) {
-
-            enviarMensaje(
-                    "ERROR|PARTIDA_NO_INICIADA");
-
+            enviarMensaje("ERROR|PARTIDA_NO_INICIADA");
             return false;
         }
 
         return true;
     }
 
-    /**
-     * Se procesa el lanzamiento de los dados (TIRAR_DADOS).
-     *
-     * El servidor valida el turno, sortea los dados, mueve la ficha y ejecuta
-     * la casilla. Despues informa a TODOS los clientes lo que paso, y solo al
-     * jugador en turno le ofrece comprar la propiedad.
-     */
-    private void procesarTirarDados() {
-
-        if (!validarJugadorEnPartida()) {
-
-            return;
-        }
-
-        try {
-
-            ResultadoEfecto resultado =
-                    juego.tirarDados(
-                            jugador.getId());
-
-            servidor.enviarATodos(
-                    Protocolo.DADOS
-                            + "|"
-                            + jugador.getId()
-                            + "|"
-                            + juego.getDado().getValor1()
-                            + "|"
-                            + juego.getDado().getValor2()
-                            + "|"
-                            + juego.getDado().getTotal());
-
-            servidor.enviarATodos(
-                    Protocolo.MOVIMIENTO
-                            + "|"
-                            + jugador.getId()
-                            + "|"
-                            + jugador.getCasillaActual().getId()
-                            + "|"
-                            + jugador.getCasillaActual().getNombre());
-
-            servidor.enviarATodos(
-                    Protocolo.EVENTO
-                            + "|"
-                            + resultado.getMensaje());
-
-            if (resultado.hayPropiedadEnVenta()) {
-
-                Propiedad propiedad =
-                        resultado.getPropiedadEnVenta();
-
-                // Solo el jugador en turno decide si compra.
-                enviarMensaje(
-                        Protocolo.OFERTA_COMPRA
-                                + "|"
-                                + propiedad.getId()
-                                + "|"
-                                + propiedad.getNombre()
-                                + "|"
-                                + propiedad.getPrecio());
-            }
-
-            if (resultado.jugadorEliminado()) {
-
-                servidor.enviarATodos(
-                        Protocolo.ELIMINADO
-                                + "|"
-                                + jugador.getId());
-
-                // El banco ya cerro su turno: se informa quien sigue.
-                if (!anunciarFinSiTermino()) {
-
-                    servidor.enviarATodos(
-                            Protocolo.TURNO
-                                    + "|"
-                                    + juego.obtenerJugadorActual().getId());
-                }
-            }
-
-        } catch (OperacionInvalidaException e) {
-
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
-        }
-    }
-
-    /**
-     * Se procesa la compra de la propiedad ofrecida (COMPRAR_PROPIEDAD).
-     */
-    private void procesarComprarPropiedad() {
-
-        if (!validarJugadorEnPartida()) {
-
-            return;
-        }
-
-        try {
-
-            Propiedad propiedad =
-                    juego.getCompraPendiente();
-
-            juego.comprarPropiedadPendiente(
-                    jugador.getId());
-
-            servidor.enviarATodos(
-                    Protocolo.COMPRA
-                            + "|"
-                            + jugador.getId()
-                            + "|"
-                            + propiedad.getId()
-                            + "|"
-                            + propiedad.getNombre()
-                            + "|"
-                            + propiedad.getPrecio()
-                            + "|"
-                            + jugador.getSaldo());
-
-        } catch (OperacionInvalidaException e) {
-
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
-        }
-    }
-
-    /**
-     * Se procesa la decision de no comprar (NO_COMPRAR).
-     */
-    private void procesarNoComprar() {
-
-        if (!validarJugadorEnPartida()) {
-
-            return;
-        }
-
-        try {
-
-            Propiedad propiedad =
-                    juego.getCompraPendiente();
-
-            juego.rechazarCompra(
-                    jugador.getId());
-
-            servidor.enviarATodos(
-                    Protocolo.EVENTO
-                            + "|"
-                            + jugador.getNombre()
-                            + " no compro "
-                            + propiedad.getNombre());
-
-        } catch (OperacionInvalidaException e) {
-
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
-        }
-    }
-
-    /**
-     * Si la partida termino, se anuncia el ganador a todos los clientes.
-     *
-     * @return true si la partida habia terminado.
-     */
-    private boolean anunciarFinSiTermino() {
-
-        dominio.Banco banco = juego.getBanco();
-
-        if (!banco.partidaTerminada()) {
-
-            return false;
-        }
-
-        Jugador ganador = banco.getGanador();
-
-        servidor.enviarATodos(
-                Protocolo.FIN_PARTIDA
-                        + "|"
-                        + ganador.getId());
-
-        return true;
-    }
-
-    /**
-     * Se procesa la solicitud para consultar el estado
-     * actual de la partida.
-     */
     private void procesarConsultarEstado() {
 
         if (jugador == null) {
-
-            enviarMensaje(
-                    "ERROR|JUGADOR_NO_REGISTRADO");
-
+            enviarMensaje("ERROR|JUGADOR_NO_REGISTRADO");
             return;
         }
 
         try {
 
-            // Se obtiene el banco que mantiene el estado oficial.
             dominio.Banco banco = juego.getBanco();
 
             String turnoActual = "NINGUNO";
 
-            // Se obtiene el jugador actual cuando la partida esta iniciada.
-            if (juego.estaIniciado()) {
-
-                Jugador actual = juego.obtenerJugadorActual();
-
-                turnoActual = actual.getId();
+            if (juego.estaIniciado() && !banco.partidaTerminada()) {
+                turnoActual = juego.obtenerJugadorActual().getId();
             }
 
-            // Se construye la respuesta utilizando el estado oficial.
             String estado = "ESTADO"
-                    + "|INICIADA="
-                    + juego.estaIniciado()
-                    + "|NUMERO_TURNO="
-                    + banco.getNumeroTurno()
-                    + "|TURNO="
-                    + turnoActual
-                    + "|JUGADORES="
-                    + juego.getCantidadJugadores()
-                    + "|JUGADORES_ACTIVOS="
-                    + banco.jugadoresActivos()
-                    + "|ID="
-                    + jugador.getId()
-                    + "|NOMBRE="
-                    + jugador.getNombre()
-                    + "|SALDO="
-                    + jugador.getSaldo()
-                    + "|PROPIEDADES="
-                    + jugador.getCantidadPropiedades()
-                    + "|ACTIVO="
-                    + jugador.estaActivo()
-                    + "|CASILLA="
-                    + (jugador.getCasillaActual() == null
+                    + "|INICIADA=" + juego.estaIniciado()
+                    + "|NUMERO_TURNO=" + banco.getNumeroTurno()
+                    + "|TURNO=" + turnoActual
+                    + "|JUGADORES=" + juego.getCantidadJugadores()
+                    + "|JUGADORES_ACTIVOS=" + banco.jugadoresActivos()
+                    + "|ID=" + jugador.getId()
+                    + "|NOMBRE=" + jugador.getNombre()
+                    + "|SALDO=" + jugador.getSaldo()
+                    + "|PROPIEDADES=" + jugador.getCantidadPropiedades()
+                    + "|ACTIVO=" + jugador.estaActivo()
+                    + "|CASILLA=" + (jugador.getCasillaActual() == null
                             ? "NINGUNA"
                             : jugador.getCasillaActual().getId());
 
-            enviarMensaje(
-                    estado);
+            enviarMensaje(estado);
 
         } catch (OperacionInvalidaException e) {
 
-            enviarMensaje(
-                    "ERROR|"
-                            + e.getMessage());
+            enviarMensaje("ERROR|" + e.getMessage());
         }
     }
 
-    /**
-     * Se procesa la solicitud para consultar
-     * el historial de transacciones.
-     */
     private void procesarConsultarTransacciones() {
 
         if (jugador == null) {
-
-            enviarMensaje(
-                    "ERROR|JUGADOR_NO_REGISTRADO");
-
+            enviarMensaje("ERROR|JUGADOR_NO_REGISTRADO");
             return;
         }
 
-        // Se obtiene el historial oficial almacenado por el banco.
-        String historial = juego.getBanco()
-                .getHistorial()
-                .generarTexto();
+        String historial = juego.getBanco().getHistorial().generarTexto();
 
-        // Se verifica si existen transacciones registradas.
-        if (historial == null
-                || historial.trim().isEmpty()) {
-
-            enviarMensaje(
-                    "TRANSACCIONES|SIN_TRANSACCIONES");
-
+        if (historial == null || historial.trim().isEmpty()) {
+            enviarMensaje("TRANSACCIONES|SIN_TRANSACCIONES");
             return;
         }
 
-        // Se envia el historial al cliente.
-        enviarMensaje(
-                "TRANSACCIONES|"
-                        + historial.replace(
-                                "\n",
-                                " ; "));
+        enviarMensaje("TRANSACCIONES|" + historial.replace("\r", "").replace("\n", " ; "));
     }
 
     /**
-     * Se envia un mensaje al cliente.
-     *
-     * @param mensaje mensaje que se enviara.
+     * EXPORTAR_TRANSACCIONES: genera el TXT del punto 13 en el servidor.
      */
-    public void enviarMensaje(
-            String mensaje) {
+    private void procesarExportar() {
 
-        if (salida != null) {
-
-            salida.println(
-                    mensaje);
+        if (jugador == null) {
+            enviarMensaje("ERROR|JUGADOR_NO_REGISTRADO");
+            return;
         }
-    }
-
-    /**
-     * Se cierra la conexion del cliente.
-     */
-    private void cerrarConexion() {
-
-        // Se elimina el manejador del registro del servidor.
-        servidor.eliminarManejador(
-                this);
 
         try {
 
-            if (socketCliente != null
-                    && !socketCliente.isClosed()) {
+            enviarMensaje(Protocolo.EXPORTADO + "|" + servidor.exportarReporte());
 
+        } catch (RuntimeException e) {
+
+            enviarMensaje("ERROR|No se pudo exportar: " + e.getMessage());
+        }
+    }
+
+    public void enviarMensaje(String mensaje) {
+
+        if (salida != null) {
+            salida.println(mensaje);
+        }
+    }
+
+    private void cerrarConexion() {
+
+        servidor.eliminarManejador(this);
+
+        if (esDispositivo) {
+            servidor.dispositivoDesconectado(this);
+        }
+
+        if (jugador != null) {
+            servidor.jugadorDesconectado(jugador);
+        }
+
+        try {
+
+            if (socketCliente != null && !socketCliente.isClosed()) {
                 socketCliente.close();
             }
 
         } catch (IOException e) {
-
-            System.out.println(
-                    "Error al cerrar cliente: "
-                            + e.getMessage());
+            System.out.println("Error al cerrar cliente: " + e.getMessage());
         }
     }
 }

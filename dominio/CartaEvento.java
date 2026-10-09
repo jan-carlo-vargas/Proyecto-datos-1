@@ -16,7 +16,8 @@ public class CartaEvento {
         AVANZAR,
         RETROCEDER,
         PERDER_TURNO,
-        IR_A_CASILLA
+        IR_A_CASILLA,
+        PAGAR_A_JUGADOR
     }
 
     private final String descripcion;
@@ -55,6 +56,11 @@ public class CartaEvento {
     public static CartaEvento retroceder(String descripcion, int casillas) {
         validarPositivo(casillas, "La cantidad de casillas a retroceder");
         return new CartaEvento(descripcion, Tipo.RETROCEDER, casillas);
+    }
+
+    public static CartaEvento pagarAJugador(String descripcion, int monto) {
+        validarPositivo(monto, "El monto de la carta");
+        return new CartaEvento(descripcion, Tipo.PAGAR_A_JUGADOR, monto);
     }
 
     public static CartaEvento perderTurno(String descripcion) {
@@ -110,6 +116,17 @@ public class CartaEvento {
                 tablero.retrocederJugador(jugador, valor);
                 return terminarMovimiento(jugador, banco, tablero, texto, false);
 
+            case PAGAR_A_JUGADOR:
+                Jugador beneficiado = banco.siguienteDe(jugador);
+                if (beneficiado == null || beneficiado.equals(jugador)) {
+                    return ResultadoEfecto.informativo(texto + " (no hay a quien pagarle)");
+                }
+                boolean sigueTrasPagar = banco.pagarAJugador(jugador, beneficiado, valor,
+                        detalle + " (a " + beneficiado.getNombre() + ")");
+                ResultadoEfecto pagoEntre = ResultadoEfecto.informativo(
+                        texto + " -> " + beneficiado.getNombre());
+                return sigueTrasPagar ? pagoEntre : pagoEntre.conEliminado();
+
             case PERDER_TURNO:
                 jugador.perderProximoTurno();
                 return ResultadoEfecto.informativo(texto).conPierdeTurno();
@@ -147,7 +164,8 @@ public class CartaEvento {
     //  MAZO POR DEFECTO
 
     /**
-     * El mazo de la partida: 10 cartas que cubren los seis tipos del enunciado.
+     * El mazo de la partida: 11 cartas que cubren los tipos del enunciado y el
+     * pago entre jugadores.
      * Los ids de IR_A_CASILLA corresponden al Tablero.crearPorDefecto(): 13 es
      * Tamarindo y 0 es Inicio. Si cambian el tablero, ajusten esos dos numeros.
      */
@@ -164,6 +182,7 @@ public class CartaEvento {
         mazo.encolar(irACasilla("Viaje sorpresa: vas a Tamarindo", 13));
         mazo.encolar(avanzar("Tapon en la Ruta 32: avanzas 5 casillas", 5));
         mazo.encolar(irACasilla("Regresas a casa: vas a Inicio y cobras", 0));
+        mazo.encolar(pagarAJugador("Cumpleanos del siguiente jugador: le pagas 40", 40));
 
         return mazo;
     }
